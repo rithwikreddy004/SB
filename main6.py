@@ -15,7 +15,22 @@ from pydantic import BaseModel
 from dotenv import load_dotenv
 from supabase import create_client, Client
 import nltk
+
+
+
+# --- NEW: NLTK Data Check on Startup ---
+try:
+    nltk.data.find('tokenizers/punkt')
+    print("NLTK 'punkt' data found.")
+except nltk.downloader.DownloadError:
+    print("NLTK 'punkt' data not found. Downloading...")
+    nltk.download('punkt')
+    print("NLTK 'punkt' data downloaded successfully.")
+# ----------------------------------------
 from nltk.tokenize import sent_tokenize
+
+
+
 
 # --- Setup and Configuration (Using your specified models) ---
 load_dotenv()
