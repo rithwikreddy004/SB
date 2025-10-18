@@ -16,7 +16,7 @@ from dotenv import load_dotenv
 from supabase import create_client, Client
 import nltk
 
-
+from nltk.tokenize import sent_tokenize
 
 # --- NEW: NLTK Data Check on Startup ---
 try:
@@ -29,7 +29,7 @@ except LookupError: # Changed from nltk.downloader.DownloadError
     nltk.download('punkt')
     print("NLTK 'punkt' data downloaded successfully.")
 # ----------------------------------------
-from nltk.tokenize import sent_tokenize
+
 
 
 
