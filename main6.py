@@ -22,7 +22,9 @@ import nltk
 try:
     nltk.data.find('tokenizers/punkt')
     print("NLTK 'punkt' data found.")
-except nltk.downloader.DownloadError:
+# --- THIS IS THE FIX: Catch the correct error type ---
+except LookupError: # Changed from nltk.downloader.DownloadError
+# ---------------------------------------------------
     print("NLTK 'punkt' data not found. Downloading...")
     nltk.download('punkt')
     print("NLTK 'punkt' data downloaded successfully.")
