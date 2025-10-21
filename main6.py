@@ -18,6 +18,9 @@ import nltk
 
 from nltk.tokenize import sent_tokenize
 
+
+'''
+
 # --- NEW: NLTK Data Check on Startup ---
 try:
     nltk.data.find('tokenizers/punkt')
@@ -29,7 +32,7 @@ except LookupError: # Changed from nltk.downloader.DownloadError
     nltk.download('punkt')
     print("NLTK 'punkt' data downloaded successfully.")
 # ----------------------------------------
-
+'''
 
 
 
