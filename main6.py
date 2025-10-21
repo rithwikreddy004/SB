@@ -332,6 +332,12 @@ async def process_topic(request: PromptRequest, background_tasks: BackgroundTask
         print(f"An error occurred: {e}")
         return {"error": "An error occurred in the processing pipeline."}
     
+
+
+
+
+'''
+    
 # --- Add this new Pydantic model with your other one ---
 class ScriptRequest(BaseModel):
     topic: str
@@ -468,6 +474,171 @@ async def generate_script(request: ScriptRequest, background_tasks: BackgroundTa
         print(f"--- PROFILING: Script generation took {total_end_time - total_start_time:.2f} seconds ---")
         
         return {"script": script_response.text}
+
+    except Exception as e:
+        print(f"SCRIPT GENERATION: An error occurred: {e}")
+        return {"error": "An error occurred during the script generation pipeline."}
+
+
+
+'''
+
+
+# --- FastAPI App ---
+app = FastAPI()
+
+class PromptRequest(BaseModel):
+    topic: str
+
+# --- UPDATED: Add duration_minutes ---
+class ScriptRequest(BaseModel):
+    topic: str
+    emotional_tone: str | None = "engaging"
+    creator_type: str | None = "educator"
+    audience_description: str | None = "a general audience interested in learning"
+    accent: str | None = "neutral"
+    duration_minutes: int | None = 10 # NEW: Add video duration in minutes, default 10
+# ------------------------------------
+
+# --- REWRITTEN: The /generate-script endpoint with dynamic duration ---
+@app.post("/generate-script")
+async def generate_script(request: ScriptRequest, background_tasks: BackgroundTasks):
+    total_start_time = time.time()
+    print(f"SCRIPT GENERATION: Received request for topic: '{request.topic}'")
+    print(f"Personalization - Duration: {request.duration_minutes} min, Tone: {request.emotional_tone}, Type: {request.creator_type}, Audience: {request.audience_description}, Accent: {request.accent}")
+
+    try:
+        # --- Step 1: Gather Context (Unchanged) ---
+        db_task = asyncio.create_task(get_db_context(request.topic))
+        await asyncio.sleep(11) # Give DB head start
+
+        db_results = []
+        new_articles = []
+        scraped_urls = set()
+        base_keywords = []
+
+        if db_task.done():
+            db_results = db_task.result()
+            print(f"--- DB task finished early. Found {len(db_results)} documents. ---")
+
+        if len(db_results) >= 3:
+            print("--- DB HIT: Performing LIGHT web scrape for latest news. ---")
+            new_articles = await get_latest_news_context(request.topic, scraped_urls)
+        else:
+            print("--- DB MISS or SLOW: Initiating DEEP web scrape. ---")
+            # (Deep scrape logic remains the same)
+            keyword_prompt =  f"""
+            Your ONLY task is to generate 3 diverse search engine keyword phrases for the topic: '{request.topic}'.
+            Follow these rules STRICTLY:
+            1. Return ONLY the 3 phrases.
+            2. DO NOT add numbers, markdown, explanations, or any introductory text.
+            3. Each phrase must be on a new line.
+            EXAMPLE INPUT: Is coding dead?
+            EXAMPLE OUTPUT:
+            future of programming jobs automation
+            AI replacing software developers
+            demand for software engineers 2025
+            """
+            response = await flash_model.generate_content_async(keyword_prompt)
+            raw_text = response.text
+            keywords_in_quotes = re.findall(r'"(.*?)"', raw_text)
+            if keywords_in_quotes: base_keywords = keywords_in_quotes
+            else: base_keywords = [kw.strip() for kw in raw_text.strip().split('\n') if kw.strip()]
+            targeted_keywords = [kw for kw in base_keywords] + [f"{kw} site:reddit.com" for kw in base_keywords]
+            new_articles = await deep_search_and_scrape(targeted_keywords, scraped_urls)
+
+        if not db_task.done():
+            print("--- Waiting for DB task to complete... ---")
+            db_results = await db_task
+            print(f"--- DB task finished. Found {len(db_results)} documents. ---")
+
+        # --- Step 2: Merge Context (Unchanged) ---
+        db_context, web_context = "", ""
+        if db_results:
+            db_context = "\n\n".join([item['content'] for item in db_results])
+        if new_articles:
+            web_context = "\n\n".join([f"Source: {art['title']}\n{art['text']}" for art in new_articles])
+            for article in new_articles:
+                background_tasks.add_task(add_scraped_data_to_db, article['title'], article['text'], article['url'])
+
+        if not db_context and not web_context:
+            return {"error": "Could not find any research material to write the script."}
+
+        # --- Step 3: Calculate Word Count & Create Personalized Prompt ---
+        print("SCRIPT GENERATION: Generating personalized script...")
+        
+        # --- NEW: Calculate target word count ---
+        WORDS_PER_MINUTE = 130
+        target_duration = request.duration_minutes if request.duration_minutes else 10 # Use default if not provided
+        target_word_count = target_duration * WORDS_PER_MINUTE
+        print(f"Targeting {target_duration} minutes / approx. {target_word_count} words.")
+        # --------------------------------------
+        
+        # --- UPDATED PROMPT with dynamic values ---
+        script_prompt = f"""
+        You are a professional YouTube scriptwriter who creates natural, engaging, and conversational scripts that feel like a real YouTuber speaking directly to the camera.
+
+        **Creator Profile:**
+        * **Creator Type:** {request.creator_type}
+        * **Target Audience:** {request.audience_description}
+        * **Desired Emotional Tone:** {request.emotional_tone}
+        * **Accent/Dialect:** {request.accent} (use phrasing natural for this accent)
+
+        **Your Task:**
+        Generate a complete YouTube video script of approximately **{target_duration} minutes** (~{target_word_count} words) based on the **main topic** below, using the provided **research context**.
+
+        **Script Style & Flow:**
+        - Output only the spoken dialogue — what the YouTuber would actually say aloud.
+        - **Do NOT include** section titles, notes, stage directions, or metadata.
+        - Speak directly to the viewer — friendly, confident, slightly spontaneous, and off-the-cuff.
+        - Use **short and medium-length sentences**, natural pauses (…) or dashes, and occasional repetition for emphasis.
+        - Include interjections, rhetorical questions, playful digressions, humor, and brief asides (“Wait, actually…”, “Can you believe that…?”, “By the way…”).
+        - Include personal anecdotes or opinions (“I remember…”, “When I tried this…”).
+        - Use **visual and emotional imagery** to make scenes vivid (“Imagine this…”, “Picture it like…”).
+        - Hook viewers emotionally in the first 15–30 seconds.
+        - Alternate between facts, insights, reactions, and short reflections to keep pacing dynamic.
+        - Treat the script as a conversation with the audience — inclusive language like “you guys”, “we all”, “my friends”.
+        - Build suspense naturally with rhetorical questions, mini cliffhangers, or curiosity hooks.
+        - Use relatable analogies or humor when explaining complex topics.
+        - Occasionally reference the creator’s regional or cultural context for relatability.
+        - Maintain natural pacing as if recording live — mix excitement, storytelling, and factual explanation.
+        - Stay close to **{target_word_count} words** (±50).
+
+        **Structure Guidance (for proportion, but do not label in script):**
+        - Hook & Introduction (~10%)
+        - Problem / Conflict (~15%)
+        - Evidence & Data (~20%)
+        - Real-world Examples (~25%)
+        - Potential Solutions / Insights (~25%)
+        - Call to Action (~5%)
+
+        **Main Topic/Idea:** "{request.topic}"
+
+        **Research Context:**
+        FOUNDATIONAL KNOWLEDGE (from database): {db_context}
+        LATEST NEWS (from web): {web_context}
+
+        **Additional Notes:**
+        - Make the opening a curiosity-driven hook that emotionally pulls the viewer in within 15–30 seconds.
+        - Use storytelling techniques: tension, suspense, surprise, and moral dilemmas when relevant.
+        - Make historical or technical details feel immersive and personal, not like a lecture.
+        - Emphasize the narrative arc: build curiosity, climax, and reflection for the audience.
+        - Ensure adaptability: script should feel natural regardless of topic, duration, or target audience.
+        """
+
+        
+        # ------------------------------------------
+
+        script_response = await content_genmodel.generate_content_async(script_prompt)
+        
+        total_end_time = time.time()
+        print(f"--- PROFILING: Script generation took {total_end_time - total_start_time:.2f} seconds ---")
+        
+        # Calculate approximate word count of the generated script
+        generated_word_count = len(script_response.text.split())
+        print(f"Generated script word count: approx. {generated_word_count}")
+
+        return {"script": script_response.text, "estimated_word_count": generated_word_count}
 
     except Exception as e:
         print(f"SCRIPT GENERATION: An error occurred: {e}")
