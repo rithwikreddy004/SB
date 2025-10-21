@@ -487,11 +487,11 @@ async def generate_script(request: ScriptRequest, background_tasks: BackgroundTa
 '''
 
 
-# --- FastAPI App ---
-app = FastAPI()
+## --- FastAPI App ---
+#app = FastAPI()
 
-class PromptRequest(BaseModel):
-    topic: str
+#class PromptRequest(BaseModel):
+ #   topic: str
 
 # --- UPDATED: Add duration_minutes ---
 class ScriptRequest(BaseModel):
