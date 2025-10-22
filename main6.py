@@ -487,6 +487,71 @@ async def generate_script(request: ScriptRequest, background_tasks: BackgroundTa
 '''
 
 
+
+
+
+
+
+# --- Define Script Structure Options ---
+STRUCTURE_GUIDANCE = {
+    "problem_solution": """
+    **Structure Guidance (for proportion, but do not label in script):**
+    - Hook & Introduction (~10%)
+    - Problem / Conflict (~15%)
+    - Evidence & Data (~20%)
+    - Real-world Examples (~25%)
+    - Potential Solutions / Insights (~25%)
+    - Call to Action (~5%)
+    """,
+        "storytelling": """
+    **Structure Guidance (for proportion, but do not label in script):**
+    - Hook & Introduction (Introduce Ordinary World) (~10%)
+    - Call to Adventure / Inciting Incident (~10%)
+    - Trials & Tribulations (Rising Action, using examples/data) (~50%)
+    - Climax / Resolution (~20%)
+    - Reflection & Takeaway (Call to Action) (~10%)
+    """,
+        "listicle": """
+    **Structure Guidance (for proportion, but do not label in script):**
+    - Hook & Introduction (State the list topic & number) (~10%)
+    - Item 1 (Explanation, examples, pros/cons) (~15-20%)
+    - Item 2 (...) (~15-20%)
+    - Item 3 (...) (~15-20%)
+    - Item X (...) (~15-20%) - *Adjust percentages based on number of items*
+    - (Optional) Bonus Item / Honorable Mentions (~10%)
+    - Conclusion & Call to Action (Summarize, final thought) (~10%)
+    """,
+        "chronological": """
+    **Structure Guidance (for proportion, but do not label in script):**
+    - Hook & Introduction (Introduce topic & relevance) (~10%)
+    - Early Beginnings / Origins (~20%)
+    - Key Developments / Turning Points (~40%) - *This is the main body*
+    - Later Stages / Modern Impact (~20%)
+    - Conclusion & Reflection (Call to Action) (~10%)
+    """,
+        "myth_debunking": """
+    **Structure Guidance (for proportion, but do not label in script):**
+    - Hook & Introduction (Introduce common misconception) (~10%)
+    - Myth 1 & Fact 1 (State myth, then debunk with evidence) (~25%)
+    - Myth 2 & Fact 2 (...) (~25%)
+    - Myth 3 & Fact 3 (...) (~25%) - *Adjust percentages based on number of myths*
+    - Conclusion & Call to Action (Summarize truths, encourage critical thinking) (~15%)
+""",
+    "tech_review": """
+    **Structure Guidance (for proportion, but do not label in script):**
+    - Hook & Introduction (Show product, state review goal) (~10%)
+    - Design & Build Quality (Look, feel) (~15%)
+    - Key Features & Specs (What it promises, tech details) (~20%)
+    - Performance & User Experience (Real-world testing, how it feels to use, battery, camera examples etc.) (~30%)
+    - Pros & Cons (Balanced summary of good and bad) (~10%)
+    - Verdict & Recommendation (Who is it for? Worth the price? Call to Action) (~15%)
+    """
+}
+
+
+
+
+
 ## --- FastAPI App ---
 #app = FastAPI()
 
@@ -501,6 +566,7 @@ class ScriptRequest(BaseModel):
     audience_description: str | None = "a general audience interested in learning"
     accent: str | None = "neutral"
     duration_minutes: int | None = 10 # NEW: Add video duration in minutes, default 10
+    script_structure: str | None = "problem_solution" # NEW FIELD
 # ------------------------------------
 
 # --- REWRITTEN: The /generate-script endpoint with dynamic duration ---
@@ -577,6 +643,13 @@ async def generate_script(request: ScriptRequest, background_tasks: BackgroundTa
         print(f"Targeting {target_duration} minutes / approx. {target_word_count} words.")
         # --------------------------------------
         
+# --- NEW: Select the requested structure guidance ---
+        requested_structure = request.script_structure if request.script_structure else "problem_solution"
+        structure_guidance_text = STRUCTURE_GUIDANCE.get(requested_structure, STRUCTURE_GUIDANCE["problem_solution"]) # Fallback to default
+        print(f"Using script structure: {requested_structure}")
+        
+        # --------------------------------------
+        
         # --- UPDATED PROMPT with dynamic values ---
         script_prompt = f"""
         You are a professional YouTube scriptwriter who creates natural, engaging, and conversational scripts that feel like a real YouTuber speaking directly to the camera.
@@ -607,13 +680,8 @@ async def generate_script(request: ScriptRequest, background_tasks: BackgroundTa
         - Maintain natural pacing as if recording live — mix excitement, storytelling, and factual explanation.
         - Stay close to **{target_word_count} words** (±50).
 
-        **Structure Guidance (for proportion, but do not label in script):**
-        - Hook & Introduction (~10%)
-        - Problem / Conflict (~15%)
-        - Evidence & Data (~20%)
-        - Real-world Examples (~25%)
-        - Potential Solutions / Insights (~25%)
-        - Call to Action (~5%)
+        
+        {structure_guidance_text} 
 
         **Main Topic/Idea:** "{request.topic}"
 
@@ -628,6 +696,7 @@ async def generate_script(request: ScriptRequest, background_tasks: BackgroundTa
         - Emphasize the narrative arc: build curiosity, climax, and reflection for the audience.
         - Ensure adaptability: script should feel natural regardless of topic, duration, or target audience.
         """
+
 
         
         # ------------------------------------------
