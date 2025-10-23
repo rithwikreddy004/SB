@@ -18,6 +18,9 @@ import nltk
 
 from nltk.tokenize import sent_tokenize
 
+from fastapi.middleware.cors import CORSMiddleware
+
+
 
 '''
 
@@ -171,6 +174,26 @@ async def get_db_context(topic: str) -> list[dict]:
 
 # --- FastAPI App ---
 app = FastAPI()
+
+
+
+
+
+
+
+# CORS Configuration
+origins = [
+    "https://www.storybit.tech",  # ✅ your production frontend
+    # "http://localhost:3000",   # (Optional) for local testing
+]
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=origins,            # List of allowed origins
+    allow_credentials=True,           # If you need cookies/auth
+    allow_methods=["*"],              # Allow all HTTP methods (GET, POST, etc.)
+    allow_headers=["*"],              # Allow all headers
+)
 class PromptRequest(BaseModel):
     topic: str
 
