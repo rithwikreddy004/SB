@@ -728,13 +728,92 @@ async def generate_script(request: ScriptRequest, background_tasks: BackgroundTa
         
         total_end_time = time.time()
         print(f"--- PROFILING: Script generation took {total_end_time - total_start_time:.2f} seconds ---")
+
+
+        # --- NEW: Prompt for Script Analysis ---
+        ANALYSIS_PROMPT_TEMPLATE = """
+        You are an expert script analyzer. Analyze the provided YouTube script based on the following criteria:
+
+        1.  **Real-world Examples:** Count how many distinct real-world examples, case studies, or specific stories are mentioned.
+        2.  **Research Facts/Stats:** Count how many distinct research findings, statistics, or specific data points are cited or explained.
+        3.  **Proverbs/Sayings:** Count how many common proverbs, idioms, or well-known sayings are used.
+        4.  **Emotional Depth:** Assess the overall emotional depth and engagement level of the script. Rate it as Low, Medium, or High.
+
+        **Your Task:**
+        Read the script below and return ONLY a JSON object with the results. Do not add any explanation or other text.
+
+        **EXAMPLE OUTPUT FORMAT:**
+        {{
+        "examples_count": 3,
+        "research_facts_count": 5,
+        "proverbs_count": 1,
+        "emotional_depth": "Medium"
+        }}
+
+        --- SCRIPT TO ANALYZE ---
+        {script_text}
+        --- END SCRIPT ---
+        """
+
+
+        # --- NEW: Step 6 - Analyze the Generated Script ---
+        print("SCRIPT ANALYSIS: Analyzing generated script...")
+        analysis_start_time = time.time()
+        analysis_prompt_filled = ANALYSIS_PROMPT_TEMPLATE.format(script_text=script_response.text)
         
-        # Calculate approximate word count of the generated script
+        analysis_response = await flash_model.generate_content_async(analysis_prompt_filled)
+        analysis_end_time = time.time()
+        print(f"--- PROFILING: Script analysis took {analysis_end_time - analysis_start_time:.2f} seconds ---")
+        
+        # --- NEW: Parse the analysis results (with error handling) ---
+        analysis_results = {
+            "examples_count": 0,
+            "research_facts_count": 0,
+            "proverbs_count": 0,
+            "emotional_depth": "Unknown"
+        }
+        try:
+            # Attempt to parse the JSON response from the analysis model
+            analysis_data = json.loads(analysis_response.text)
+            analysis_results["examples_count"] = analysis_data.get("examples_count", 0)
+            analysis_results["research_facts_count"] = analysis_data.get("research_facts_count", 0)
+            analysis_results["proverbs_count"] = analysis_data.get("proverbs_count", 0)
+            analysis_results["emotional_depth"] = analysis_data.get("emotional_depth", "Unknown")
+            print(f"Script Analysis Results: {analysis_results}")
+        except json.JSONDecodeError:
+            print("SCRIPT ANALYSIS: Failed to parse analysis JSON response from AI.")
+        except Exception as e:
+             print(f"SCRIPT ANALYSIS: Error during analysis parsing: {e}")
+        # -----------------------------------------------------------
+
+        total_end_time = time.time()
+        print(f"--- PROFILING: Total /generate-script analysis request time was {total_end_time - total_start_time:.2f} seconds ---")
+        
+        
         generated_word_count = len(script_response.text.split())
         print(f"Generated script word count: approx. {generated_word_count}")
 
-        return {"script": script_response.text, "estimated_word_count": generated_word_count}
+
+
+        # --- FINAL RETURN STATEMENT with all the data ---
+        return {
+            "script":script_response.text ,
+            "estimated_word_count": generated_word_count,
+            "source_urls": list(scraped_urls), # Use the correct list
+            "analysis": analysis_results # Add the analysis results
+        }
 
     except Exception as e:
         print(f"SCRIPT GENERATION: An error occurred: {e}")
         return {"error": "An error occurred during the script generation pipeline."}
+
+        
+        # Calculate approximate word count of the generated script
+        #generated_word_count = len(script_response.text.split())
+        #print(f"Generated script word count: approx. {generated_word_count}")
+
+        #return {"script": script_response.text, "estimated_word_count": generated_word_count}
+
+    #except Exception as e:
+        #print(f"SCRIPT GENERATION: An error occurred: {e}")
+        #return {"error": "An error occurred during the script generation pipeline."}
