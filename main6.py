@@ -15,7 +15,7 @@ from pydantic import BaseModel
 from dotenv import load_dotenv
 from supabase import create_client, Client
 import nltk
-
+import json
 from nltk.tokenize import sent_tokenize
 
 from fastapi.middleware.cors import CORSMiddleware
